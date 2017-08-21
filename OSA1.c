@@ -36,7 +36,7 @@ void printStates_1(Thread thread,int threadNum){
     while(thread->tid!=0){
         thread=thread->next;
     }
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < NUMTHREADS; ++i) {
         printf("threadID: %d state:%s\n", thread->tid,states_str[thread->state]  );
         thread=thread->next;
     }
