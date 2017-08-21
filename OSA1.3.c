@@ -11,9 +11,10 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "littleThread.h"
-#include "threads2.c" // rename this for different threads
+#include "threads3.c" // rename this for different threads
 
 
 Thread newThread; // the thread currently being set up
@@ -88,17 +89,31 @@ void threadYield(){
 
 
 	if(ready->state==READY) {
-		//switcher(running, ready);
+		//
 		printf("yeild: thread %d to thread %d\n", running->tid, ready->tid);
+        //switcher(running, ready);
 
-		if (setjmp(running->environment) == 0) { // so we can come back here
-			running->state = READY;
-			ready->state = RUNNING;
-			//printf("scheduling %d\n", nextThread->tid);
-			printStates_1(ready, NUMTHREADS);
-			longjmp(ready->environment, 1);
-		}
+        if (running->state == FINISHED) { // it has finished
+            //printf("\ndisposing %d\n", prevThread->tid);
+            //free(prevThread->stackAddr); // Wow!
+            //printStates_1(prevThread,NUMTHREADS);
+            longjmp(ready->environment, 1);
+        } else if (setjmp(running->environment) == 0) { // so we can come back here
+            running->state = READY;
+            ready->state = RUNNING;
+            //printf("scheduling %d\n", nextThread->tid);
+            printStates_1(ready,NUMTHREADS);
+            longjmp(ready->environment, 1);
+        }
 	}
+
+}
+
+void sigroutine(int signo) {
+
+	printf("Catch a signal -- SIGVTALRM \n");
+	threadYield();
+
 
 }
 
@@ -182,6 +197,15 @@ int main(void) {
 
     printStates(threads,NUMTHREADS);
 	puts("switching to first thread");
+
+	struct itimerval value,ovalue,value2;
+	signal(SIGVTALRM, sigroutine);
+	value2.it_value.tv_sec = 0;
+	value2.it_value.tv_usec = 20000;
+	value2.it_interval.tv_sec = 0;
+	value2.it_interval.tv_usec = 20000;
+	setitimer(ITIMER_VIRTUAL, &value2, &ovalue);
+
 	switcher(mainThread, threads[0]);
 	puts("back to the main thread");
     printStates(threads,NUMTHREADS);
