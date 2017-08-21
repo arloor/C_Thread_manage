@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include "littleThread.h"
-#include "threads1.c" // rename this for different threads
+#include "threads2.c" // rename this for different threads
 
 
 Thread newThread; // the thread currently being set up
@@ -22,7 +22,9 @@ Thread mainThread; // the main thread
 
 struct sigaction setUpAction;
 
-void printStates(Thread threads[],int threadNum){
+Thread thread_copy;
+
+void printStates(Thread threads[], int threadNum){
     printf("Thread States\n=============\n");
     for (int i = 0; i < threadNum; ++i) {
         printf("threadID: %d state:%s\n", threads[i]->tid,states_str[threads[i]->state]  );
@@ -30,6 +32,8 @@ void printStates(Thread threads[],int threadNum){
     }
     printf("\n");
 }
+
+
 
 void printStates_1(Thread thread,int threadNum){
     printf("Thread States\n=============\n");
@@ -46,25 +50,56 @@ void printStates_1(Thread thread,int threadNum){
 /*
  * Switches execution from prevThread to nextThread.
  */
-void switcher(Thread prevThread, Thread nextThread,Thread threads[]) {
+void switcher(Thread prevThread, Thread nextThread) {
     int i=0;
     while(i<NUMTHREADS){
         if (prevThread->state == FINISHED) { // it has finished
-            printf("\ndisposing %d\n", prevThread->tid);
+            //printf("\ndisposing %d\n", prevThread->tid);
             //free(prevThread->stackAddr); // Wow!
-            printStates_1(prevThread,NUMTHREADS);
+            //printStates_1(prevThread,NUMTHREADS);
             longjmp(nextThread->environment, 1);
         } else if (setjmp(prevThread->environment) == 0) { // so we can come back here
             prevThread->state = READY;
             nextThread->state = RUNNING;
-            printf("scheduling %d\n", nextThread->tid);
-            //printStates(threads,NUMTHREADS);
+            //printf("scheduling %d\n", nextThread->tid);
+            printStates_1(nextThread,NUMTHREADS);
             longjmp(nextThread->environment, 1);
         }
         prevThread=nextThread;
         nextThread=nextThread->next;
         i++;
     }
+}
+
+void threadYield(){
+	Thread running=thread_copy;
+
+	int i=0;
+	while(running->state!=RUNNING&&i<NUMTHREADS) {
+		running = running->next;
+		i++;
+	}
+	i=0;
+	Thread ready=running;
+	while(ready->state!=READY&&i<NUMTHREADS) {
+		ready = ready->next;
+		i++;
+	}
+
+
+	if(ready->state==READY) {
+		//switcher(running, ready);
+		printf("yeild: thread %d to thread %d\n", running->tid, ready->tid);
+
+		if (setjmp(running->environment) == 0) { // so we can come back here
+			running->state = READY;
+			ready->state = RUNNING;
+			//printf("scheduling %d\n", nextThread->tid);
+			printStates_1(ready, NUMTHREADS);
+			longjmp(ready->environment, 1);
+		}
+	}
+
 }
 
 /*
@@ -78,7 +113,7 @@ void associateStack(int signum,Thread threads) {
 	if (setjmp(localThread->environment) != 0) { // will be zero if called directly
 		(localThread->start)();
 		localThread->state = FINISHED;
-		switcher(localThread, mainThread,threads); // at the moment back to the main thread
+		switcher(localThread, mainThread); // at the moment back to the main thread
 	}
 }
 
@@ -129,7 +164,7 @@ Thread createThread(void (startFunc)()) {
 
 int main(void) {
 	struct thread controller;
-    Thread threads[NUMTHREADS];
+	Thread threads[NUMTHREADS];
 	mainThread = &controller;
 	mainThread->state = RUNNING;
 	setUpStackTransfer();
@@ -142,11 +177,12 @@ int main(void) {
 		threads[i]->next=threads[(i+1)%NUMTHREADS];
 		threads[(i+1)%NUMTHREADS]->prev=threads[i];
 	}
+	thread_copy=threads[0];
 
 
     printStates(threads,NUMTHREADS);
 	puts("switching to first thread");
-	switcher(mainThread, threads[0],threads);
+	switcher(mainThread, threads[0]);
 	puts("back to the main thread");
     printStates(threads,NUMTHREADS);
 	return EXIT_SUCCESS;
